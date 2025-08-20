@@ -5,6 +5,7 @@ class HumVidCapApp {
         this.activeSessions = new Map();
         this.isRecording = new Set();
         this.humanDetectionActive = new Set();
+        this.detectionTimeline = new Map();
         
         this.init();
     }
@@ -29,6 +30,33 @@ class HumVidCapApp {
         
         document.getElementById('clear-log-btn').addEventListener('click', () => {
             this.clearLog();
+        });
+        
+        // Timeline controls
+        document.getElementById('refresh-timeline-btn').addEventListener('click', () => {
+            this.refreshTimeline();
+        });
+        
+        document.getElementById('clear-timeline-btn').addEventListener('click', () => {
+            this.clearTimeline();
+        });
+        
+        document.getElementById('timeline-filter').addEventListener('change', (e) => {
+            this.filterTimeline(e.target.value);
+        });
+        
+        // Detection settings
+        document.getElementById('confidence-threshold').addEventListener('input', (e) => {
+            this.updateConfidenceDisplay(e.target.value);
+            this.updateDetectionSettings();
+        });
+        
+        document.getElementById('auto-capture-enabled').addEventListener('change', () => {
+            this.updateDetectionSettings();
+        });
+        
+        document.getElementById('auto-capture-type').addEventListener('change', () => {
+            this.updateDetectionSettings();
         });
         
         // Storage type change
@@ -81,6 +109,14 @@ class HumVidCapApp {
 
         this.socket.on('person-detected', (data) => {
             this.onPersonDetected(data);
+        });
+
+        this.socket.on('auto-capture', (data) => {
+            this.onAutomaticCapture(data);
+        });
+
+        this.socket.on('timeline-data', (data) => {
+            this.updateTimelineDisplay(data);
         });
 
         this.socket.on('capture-frame', (data) => {
@@ -398,14 +434,46 @@ class HumVidCapApp {
         // Find viewport by session ID
         for (let [viewportId, sessionId] of this.activeSessions) {
             if (sessionId === data.sessionId) {
-                this.displayDetectedPerson(viewportId, data.person.name, data.person.confidence);
-                this.addLogEntry(`Person detected in Viewport ${viewportId}: ${data.person.name} (${(data.person.confidence * 100).toFixed(1)}%)`, 'success');
+                const detection = data.detection;
+                this.displayDetectedPerson(viewportId, detection.personName, detection.confidence, detection.appearance);
+                this.addLogEntry(`Person detected in Viewport ${viewportId}: ${detection.personName} (${(detection.confidence * 100).toFixed(1)}%)`, 'success');
+                
+                // Add to timeline
+                this.addTimelineEvent(data.sessionId, {
+                    type: 'detection',
+                    person: detection.personName,
+                    confidence: detection.confidence,
+                    appearance: detection.appearance,
+                    timestamp: detection.timestamp,
+                    viewportId: viewportId
+                });
+                
                 break;
             }
         }
     }
 
-    displayDetectedPerson(viewportId, name, confidence = null) {
+    onAutomaticCapture(data) {
+        const { sessionId, viewportId, filename, personName, type } = data;
+        
+        this.addLogEntry(`Automatic ${type} capture: ${filename} (${personName})`, 'success');
+        this.showToast(`Auto-captured ${type} for ${personName}`, 'success');
+        
+        // Add to timeline
+        this.addTimelineEvent(sessionId, {
+            type: 'auto-capture',
+            person: personName,
+            filename: filename,
+            captureType: type,
+            timestamp: new Date().toISOString(),
+            viewportId: viewportId
+        });
+        
+        // Flash effect
+        this.flashScreenshot(viewportId);
+    }
+
+    displayDetectedPerson(viewportId, name, confidence = null, appearance = null) {
         const peopleList = document.querySelector(`#people-${viewportId} .people-list`);
         
         // Check if person already exists
@@ -418,9 +486,22 @@ class HumVidCapApp {
         
         const personTag = document.createElement('div');
         personTag.className = 'person-tag';
-        personTag.textContent = confidence ? 
-            `${name} (${(confidence * 100).toFixed(1)}%)` : 
-            name;
+        
+        const personInfo = document.createElement('div');
+        personInfo.className = 'person-info';
+        personInfo.innerHTML = `
+            <strong>${name}</strong>
+            ${confidence ? `<span class="confidence">(${(confidence * 100).toFixed(1)}%)</span>` : ''}
+        `;
+        
+        personTag.appendChild(personInfo);
+        
+        if (appearance) {
+            const appearanceDiv = document.createElement('div');
+            appearanceDiv.className = 'person-appearance';
+            appearanceDiv.textContent = appearance;
+            personTag.appendChild(appearanceDiv);
+        }
         
         peopleList.appendChild(personTag);
     }
@@ -555,6 +636,160 @@ class HumVidCapApp {
         
         this.addLogEntry('Activity log downloaded', 'success');
         this.showToast('Activity log downloaded', 'success');
+    }
+
+    // Timeline methods
+    addTimelineEvent(sessionId, event) {
+        if (!this.detectionTimeline.has(sessionId)) {
+            this.detectionTimeline.set(sessionId, []);
+        }
+        
+        const timeline = this.detectionTimeline.get(sessionId);
+        timeline.push({
+            ...event,
+            id: `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        });
+        
+        // Keep only last 100 events
+        if (timeline.length > 100) {
+            timeline.shift();
+        }
+        
+        this.updateTimelineDisplay();
+        this.updateTimelineFilter();
+    }
+
+    refreshTimeline() {
+        // Fetch timeline from server
+        fetch('/api/timelines')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update local timeline data
+                    for (let [sessionId, events] of Object.entries(data.timelines)) {
+                        this.detectionTimeline.set(sessionId, events);
+                    }
+                    this.updateTimelineDisplay();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching timeline:', error);
+                this.showToast('Error fetching timeline', 'error');
+            });
+    }
+
+    clearTimeline() {
+        const timelineContainer = document.getElementById('timeline-container');
+        timelineContainer.innerHTML = '<div class="timeline-empty">Timeline cleared</div>';
+        this.detectionTimeline.clear();
+    }
+
+    filterTimeline(sessionFilter) {
+        this.updateTimelineDisplay(sessionFilter);
+    }
+
+    updateTimelineDisplay(sessionFilter = 'all') {
+        const timelineContainer = document.getElementById('timeline-container');
+        const allEvents = [];
+        
+        // Collect all events from all sessions
+        for (let [sessionId, events] of this.detectionTimeline) {
+            if (sessionFilter === 'all' || sessionFilter === sessionId) {
+                events.forEach(event => {
+                    allEvents.push({ ...event, sessionId });
+                });
+            }
+        }
+        
+        // Sort by timestamp (newest first)
+        allEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        if (allEvents.length === 0) {
+            timelineContainer.innerHTML = '<div class="timeline-empty">No detection events yet</div>';
+            return;
+        }
+        
+        timelineContainer.innerHTML = allEvents.map(event => this.createTimelineEventHTML(event)).join('');
+    }
+
+    createTimelineEventHTML(event) {
+        const timestamp = new Date(event.timestamp).toLocaleString();
+        const isAutoCapture = event.type === 'auto-capture';
+        
+        return `
+            <div class="timeline-event ${isAutoCapture ? 'auto-capture' : ''}">
+                <div class="timeline-event-header">
+                    <span class="timeline-event-person">${event.person}</span>
+                    <span class="timeline-event-time">${timestamp}</span>
+                </div>
+                
+                ${event.confidence ? `<span class="timeline-event-confidence">${(event.confidence * 100).toFixed(1)}% confidence</span>` : ''}
+                
+                ${isAutoCapture ? `<span class="timeline-event-capture">📸 Auto-captured ${event.captureType}: ${event.filename}</span>` : ''}
+                
+                ${event.appearance ? `
+                    <div class="detection-appearance">
+                        <div class="appearance-label">Appearance:</div>
+                        ${event.appearance}
+                    </div>
+                ` : ''}
+                
+                <div class="timeline-event-details">
+                    Viewport ${event.viewportId} • ${isAutoCapture ? 'Automatic Capture' : 'Human Detection'}
+                </div>
+            </div>
+        `;
+    }
+
+    updateTimelineFilter() {
+        const filter = document.getElementById('timeline-filter');
+        const currentValue = filter.value;
+        
+        // Clear existing options except "All Sessions"
+        filter.innerHTML = '<option value="all">All Sessions</option>';
+        
+        // Add session options
+        for (let sessionId of this.activeSessions.values()) {
+            const option = document.createElement('option');
+            option.value = sessionId;
+            option.textContent = `Session ${sessionId.slice(-8)}`;
+            filter.appendChild(option);
+        }
+        
+        // Restore selected value if it still exists
+        if (Array.from(filter.options).some(opt => opt.value === currentValue)) {
+            filter.value = currentValue;
+        }
+    }
+
+    updateDetectionSettings() {
+        const settings = {
+            confidenceThreshold: parseFloat(document.getElementById('confidence-threshold').value),
+            autoCapture: document.getElementById('auto-capture-enabled').checked,
+            captureType: document.getElementById('auto-capture-type').value
+        };
+        
+        fetch('/api/detection-settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(settings)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                this.addLogEntry('Detection settings updated', 'success');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating detection settings:', error);
+        });
+    }
+
+    updateConfidenceDisplay(value) {
+        const display = document.getElementById('confidence-value');
+        display.textContent = `${Math.round(value * 100)}%`;
     }
 
     showToast(message, type = 'info') {

@@ -274,11 +274,46 @@
             </div>
             
             <div class="settings-section">
+                <h4>🤖 Detection Settings</h4>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="auto-capture-enabled" checked>
+                    <label for="auto-capture-enabled">Auto-capture on detection</label>
+                </div>
+                
+                <label>Capture Type:</label>
+                <select id="auto-capture-type" class="form-control">
+                    <option value="photo">Photo only</option>
+                    <option value="video">Video only</option>
+                    <option value="both">Both</option>
+                </select>
+                
+                <label>Confidence Threshold:</label>
+                <input type="range" id="confidence-threshold" min="0.5" max="1.0" step="0.05" value="0.7" class="slider">
+                <span id="confidence-value">70%</span>
+            </div>
+            
+            <div class="settings-section">
                 <h4>📊 Activity Log</h4>
                 <div id="activity-log" class="log-container">
                     <div class="log-entry">Application started - Ready for capture</div>
                 </div>
                 <button class="btn btn-outline" id="clear-log-btn">Clear Log</button>
+            </div>
+        </div>
+
+        <!-- Timeline Panel -->
+        <div class="timeline-panel">
+            <h3>⏰ Detection Timeline</h3>
+            <div class="timeline-controls">
+                <button class="btn btn-primary" id="refresh-timeline-btn">Refresh Timeline</button>
+                <button class="btn btn-secondary" id="clear-timeline-btn">Clear Timeline</button>
+                <select id="timeline-filter" class="form-control">
+                    <option value="all">All Sessions</option>
+                </select>
+            </div>
+            
+            <div id="timeline-container" class="timeline-container">
+                <div class="timeline-empty">No detection events yet</div>
             </div>
         </div>
     </div>

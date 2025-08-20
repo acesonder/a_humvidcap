@@ -8,6 +8,9 @@ const multer = require('multer');
 const winston = require('winston');
 const fs = require('fs');
 
+// Import services
+const HumanDetectionService = require('./humanDetection');
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -53,13 +56,33 @@ const upload = multer({ storage: storage });
 // Store active capture sessions
 const activeSessions = new Map();
 
+// Initialize human detection service
+const humanDetection = new HumanDetectionService();
+
+// Set up human detection capture callback
+humanDetection.setCaptureCallback((captureConfig) => {
+  // Handle automatic capture requests
+  handleAutomaticCapture(captureConfig);
+});
+
+// Initialize human detection service
+humanDetection.initialize().then(result => {
+  if (result.success) {
+    logger.info('Human detection service initialized');
+  } else {
+    logger.error('Failed to initialize human detection service:', result.message);
+  }
+}).catch(error => {
+  logger.error('Error initializing human detection service:', error);
+});
+
 // Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // API endpoint to start capture session
-app.post('/api/start-capture', (req, res) => {
+app.post('/api/start-capture', async (req, res) => {
   const { viewportId, sourceType, sourceUrl, captureType, frameRate, humanDetection } = req.body;
   
   const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -81,6 +104,20 @@ app.post('/api/start-capture', (req, res) => {
   
   logger.info('Capture session started', { sessionId, session });
   
+  // Start human detection if enabled
+  if (session.humanDetection && humanDetection && typeof humanDetection.startDetection === 'function') {
+    try {
+      await humanDetection.startDetection(sessionId, {
+        autoCapture: true,
+        captureType: 'photo',
+        captureDelay: 1000
+      });
+      logger.info('Human detection started for session', { sessionId });
+    } catch (error) {
+      logger.error('Error starting human detection:', error.message);
+    }
+  }
+  
   res.json({
     success: true,
     sessionId: sessionId,
@@ -89,13 +126,23 @@ app.post('/api/start-capture', (req, res) => {
 });
 
 // API endpoint to stop capture session
-app.post('/api/stop-capture', (req, res) => {
+app.post('/api/stop-capture', async (req, res) => {
   const { sessionId } = req.body;
   
   if (activeSessions.has(sessionId)) {
     const session = activeSessions.get(sessionId);
     session.status = 'stopped';
     session.endTime = new Date().toISOString();
+    
+    // Stop human detection
+    if (humanDetection && typeof humanDetection.stopDetection === 'function') {
+      try {
+        await humanDetection.stopDetection(sessionId);
+        logger.info('Human detection stopped for session', { sessionId });
+      } catch (error) {
+        logger.error('Error stopping human detection:', error.message);
+      }
+    }
     
     logger.info('Capture session stopped', { sessionId });
     
@@ -185,6 +232,119 @@ app.get('/api/sessions', (req, res) => {
   });
 });
 
+// API endpoint to get detection timeline
+app.get('/api/timeline/:sessionId', (req, res) => {
+  const sessionId = req.params.sessionId;
+  
+  const result = humanDetection.getDetectionTimeline(sessionId);
+  
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(404).json({
+      success: false,
+      message: 'Timeline not found'
+    });
+  }
+});
+
+// API endpoint to get all detection timelines
+app.get('/api/timelines', (req, res) => {
+  const result = humanDetection.getAllDetectionTimelines();
+  res.json(result);
+});
+
+// API endpoint to get human detection settings
+app.get('/api/detection-settings', (req, res) => {
+  const result = humanDetection.getSettings();
+  res.json(result);
+});
+
+// API endpoint to update human detection settings
+app.post('/api/detection-settings', (req, res) => {
+  const newSettings = req.body;
+  const result = humanDetection.updateSettings(newSettings);
+  
+  if (result.success) {
+    logger.info('Detection settings updated', { settings: result.settings });
+  }
+  
+  res.json(result);
+});
+
+// Function to handle automatic capture requests from human detection
+async function handleAutomaticCapture(captureConfig) {
+  try {
+    const { sessionId, detectionId, personName, captureType } = captureConfig;
+    
+    // Find the viewport for this session
+    let viewportId = null;
+    for (let [id, session] of activeSessions) {
+      if (session.id === sessionId) {
+        viewportId = session.viewportId;
+        break;
+      }
+    }
+    
+    if (!viewportId) {
+      logger.error('Could not find viewport for automatic capture', { sessionId });
+      return;
+    }
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    let filename;
+    
+    if (captureType === 'photo' || captureType === 'both') {
+      filename = `auto-capture_${personName}_${viewportId}_${timestamp}.png`;
+      
+      logger.info('Automatic photo capture triggered', { 
+        sessionId, 
+        detectionId, 
+        personName, 
+        filename 
+      });
+      
+      // Update the detection event with the capture file
+      humanDetection.updateCaptureFileForEvent(sessionId, detectionId, filename);
+      
+      // Emit to connected clients
+      io.emit('auto-capture', { 
+        sessionId, 
+        viewportId, 
+        filename, 
+        personName, 
+        type: 'photo' 
+      });
+    }
+    
+    if (captureType === 'video' || captureType === 'both') {
+      filename = `auto-capture_${personName}_${viewportId}_${timestamp}.mp4`;
+      
+      logger.info('Automatic video capture triggered', { 
+        sessionId, 
+        detectionId, 
+        personName, 
+        filename 
+      });
+      
+      // Update the detection event with the capture file
+      humanDetection.updateCaptureFileForEvent(sessionId, detectionId, filename);
+      
+      // Emit to connected clients
+      io.emit('auto-capture', { 
+        sessionId, 
+        viewportId, 
+        filename, 
+        personName, 
+        type: 'video' 
+      });
+    }
+    
+  } catch (error) {
+    logger.error('Error in automatic capture', { error: error.message, captureConfig });
+  }
+}
+
 // File upload endpoint
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (req.file) {
@@ -217,10 +377,29 @@ io.on('connection', (socket) => {
     logger.info('Client left viewport', { socketId: socket.id, viewportId });
   });
   
+  // Handle person detection events from the detection service
+  socket.on('request-timeline', (sessionId) => {
+    const timeline = humanDetection.getDetectionTimeline(sessionId);
+    socket.emit('timeline-data', timeline);
+  });
+  
   socket.on('disconnect', () => {
     logger.info('Client disconnected', { socketId: socket.id });
   });
 });
+
+// Set up human detection event emission
+humanDetection.emitDetectionEvent = (sessionId, detections) => {
+  detections.forEach(detection => {
+    io.emit('person-detected', { 
+      sessionId, 
+      detection: {
+        ...detection,
+        appearance: detection.appearance
+      }
+    });
+  });
+};
 
 // Error handling middleware
 app.use((err, req, res, next) => {

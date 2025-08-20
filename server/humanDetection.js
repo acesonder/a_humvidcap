@@ -7,13 +7,20 @@ class HumanDetectionService {
         this.isInitialized = false;
         this.detectionSessions = new Map();
         this.knownPeople = new Map(); // Store known people with their features
+        this.detectionEvents = new Map(); // Store timeline of all detection events
         this.detectionSettings = {
             confidenceThreshold: 0.7,
             maxDetections: 10,
             detectionInterval: 1000, // ms
             enableFaceRecognition: true,
-            enableBodyDetection: true
+            enableBodyDetection: true,
+            autoCapture: true,
+            captureDelay: 500, // ms delay before capturing
+            captureType: 'photo' // 'photo', 'video', 'both'
         };
+        
+        // Callback function for triggering captures (set by main app)
+        this.onCaptureRequested = null;
     }
 
     async initialize() {
@@ -176,6 +183,7 @@ class HumanDetectionService {
 
         const person = possiblePeople[Math.floor(Math.random() * possiblePeople.length)];
         const confidence = 0.6 + (Math.random() * 0.4); // 0.6 to 1.0
+        const features = this.generateDetailedFeatures();
         
         return {
             id: `detection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -187,14 +195,99 @@ class HumanDetectionService {
                 width: 100 + Math.floor(Math.random() * 100),
                 height: 150 + Math.floor(Math.random() * 100)
             },
-            features: {
-                age: Math.floor(Math.random() * 60) + 18,
-                gender: Math.random() > 0.5 ? 'male' : 'female',
-                emotion: this.getRandomEmotion(),
-                pose: this.getRandomPose()
-            },
-            timestamp: new Date().toISOString()
+            features: features,
+            appearance: this.generateAppearanceDescription(features),
+            timestamp: new Date().toISOString(),
+            captureTriggered: false
         };
+    }
+
+    generateDetailedFeatures() {
+        const hairColors = ['black', 'brown', 'blonde', 'red', 'gray', 'white'];
+        const hairStyles = ['short', 'long', 'curly', 'straight', 'wavy', 'bald'];
+        const clothingColors = ['black', 'white', 'blue', 'red', 'green', 'gray', 'navy', 'brown'];
+        const clothingTypes = ['shirt', 'jacket', 'sweater', 'dress', 't-shirt', 'hoodie', 'blazer'];
+        const accessories = ['glasses', 'hat', 'scarf', 'watch', 'necklace', 'earrings', 'none'];
+        const heights = ['short', 'average', 'tall'];
+        const builds = ['slim', 'average', 'athletic', 'heavy'];
+
+        return {
+            age: Math.floor(Math.random() * 60) + 18,
+            gender: Math.random() > 0.5 ? 'male' : 'female',
+            emotion: this.getRandomEmotion(),
+            pose: this.getRandomPose(),
+            hair: {
+                color: hairColors[Math.floor(Math.random() * hairColors.length)],
+                style: hairStyles[Math.floor(Math.random() * hairStyles.length)]
+            },
+            clothing: {
+                topColor: clothingColors[Math.floor(Math.random() * clothingColors.length)],
+                topType: clothingTypes[Math.floor(Math.random() * clothingTypes.length)],
+                bottomColor: clothingColors[Math.floor(Math.random() * clothingColors.length)]
+            },
+            accessories: accessories[Math.floor(Math.random() * accessories.length)],
+            physique: {
+                height: heights[Math.floor(Math.random() * heights.length)],
+                build: builds[Math.floor(Math.random() * builds.length)]
+            },
+            distinctive: this.getDistinctiveFeatures()
+        };
+    }
+
+    generateAppearanceDescription(features) {
+        let description = [];
+        
+        // Basic demographics
+        description.push(`${features.age}-year-old ${features.gender}`);
+        
+        // Physical appearance
+        if (features.physique.height !== 'average') {
+            description.push(`${features.physique.height} height`);
+        }
+        if (features.physique.build !== 'average') {
+            description.push(`${features.physique.build} build`);
+        }
+        
+        // Hair description
+        if (features.hair.style !== 'bald') {
+            description.push(`${features.hair.color} ${features.hair.style} hair`);
+        } else {
+            description.push('bald');
+        }
+        
+        // Clothing
+        description.push(`wearing ${features.clothing.topColor} ${features.clothing.topType}`);
+        
+        // Accessories
+        if (features.accessories !== 'none') {
+            description.push(`wearing ${features.accessories}`);
+        }
+        
+        // Emotion and pose
+        description.push(`appears ${features.emotion}`);
+        description.push(features.pose.replace('_', ' '));
+        
+        // Distinctive features
+        if (features.distinctive.length > 0) {
+            description.push(`distinctive: ${features.distinctive.join(', ')}`);
+        }
+        
+        return description.join(', ');
+    }
+
+    getDistinctiveFeatures() {
+        const features = ['beard', 'mustache', 'tattoos', 'piercing', 'scar', 'freckles', 'dimples'];
+        const numFeatures = Math.floor(Math.random() * 3); // 0-2 features
+        const selectedFeatures = [];
+        
+        for (let i = 0; i < numFeatures; i++) {
+            const feature = features[Math.floor(Math.random() * features.length)];
+            if (!selectedFeatures.includes(feature)) {
+                selectedFeatures.push(feature);
+            }
+        }
+        
+        return selectedFeatures;
     }
 
     getRandomEmotion() {
@@ -219,6 +312,8 @@ class HumanDetectionService {
                 this.isSimilarDetection(p.lastDetection, detection)
             );
 
+            let isNewDetection = false;
+            
             if (existingPerson) {
                 // Update existing person
                 existingPerson.lastDetection = detection;
@@ -239,10 +334,19 @@ class HumanDetectionService {
                 };
                 
                 session.detectedPeople.push(newPerson);
+                isNewDetection = true;
             }
 
             session.totalDetections++;
             session.lastDetectionTime = detection.timestamp;
+            
+            // Store detection event for timeline
+            this.storeDetectionEvent(sessionId, detection);
+            
+            // Trigger automatic capture if enabled and this is a new detection
+            if (session.options.autoCapture && isNewDetection && !detection.captureTriggered) {
+                this.triggerAutomaticCapture(sessionId, detection);
+            }
         });
 
         // Emit detection event (would be handled by the main app)
@@ -260,12 +364,98 @@ class HumanDetectionService {
         return timeDiff < 5000 && positionDiff < 100; // 5 seconds and 100 pixels
     }
 
-    emitDetectionEvent(sessionId, detections) {
-        // This would emit socket events in the main application
-        console.log(`Detection event for session ${sessionId}:`, detections.length, 'people detected');
+    storeDetectionEvent(sessionId, detection) {
+        if (!this.detectionEvents.has(sessionId)) {
+            this.detectionEvents.set(sessionId, []);
+        }
         
-        // In the main app, this would call:
-        // io.emit('person-detected', { sessionId, detections });
+        const events = this.detectionEvents.get(sessionId);
+        const event = {
+            id: detection.id,
+            sessionId: sessionId,
+            timestamp: detection.timestamp,
+            personName: detection.personName,
+            confidence: detection.confidence,
+            appearance: detection.appearance,
+            features: detection.features,
+            boundingBox: detection.boundingBox,
+            captureTriggered: detection.captureTriggered,
+            captureFiles: []
+        };
+        
+        events.push(event);
+        
+        // Keep only last 1000 events per session
+        if (events.length > 1000) {
+            events.shift();
+        }
+    }
+
+    triggerAutomaticCapture(sessionId, detection) {
+        const session = this.detectionSessions.get(sessionId);
+        if (!session || !this.onCaptureRequested) return;
+        
+        detection.captureTriggered = true;
+        
+        setTimeout(() => {
+            const captureConfig = {
+                sessionId: sessionId,
+                detectionId: detection.id,
+                reason: 'human_detected',
+                personName: detection.personName,
+                confidence: detection.confidence,
+                captureType: session.options.captureType || 'photo'
+            };
+            
+            console.log(`Triggering automatic capture for detection: ${detection.personName} (${(detection.confidence * 100).toFixed(1)}%)`);
+            
+            // Call the capture callback provided by the main application
+            if (this.onCaptureRequested) {
+                this.onCaptureRequested(captureConfig);
+            }
+            
+        }, session.options.captureDelay || 500);
+    }
+
+    getDetectionTimeline(sessionId) {
+        const events = this.detectionEvents.get(sessionId) || [];
+        
+        return {
+            success: true,
+            timeline: events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
+            totalEvents: events.length
+        };
+    }
+
+    getAllDetectionTimelines() {
+        const allTimelines = {};
+        
+        for (let [sessionId, events] of this.detectionEvents) {
+            allTimelines[sessionId] = events.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        }
+        
+        return {
+            success: true,
+            timelines: allTimelines
+        };
+    }
+
+    updateCaptureFileForEvent(sessionId, detectionId, captureFile) {
+        const events = this.detectionEvents.get(sessionId);
+        if (events) {
+            const event = events.find(e => e.id === detectionId);
+            if (event) {
+                event.captureFiles.push({
+                    filename: captureFile,
+                    timestamp: new Date().toISOString(),
+                    type: captureFile.includes('video') ? 'video' : 'photo'
+                });
+            }
+        }
+    }
+
+    setCaptureCallback(callback) {
+        this.onCaptureRequested = callback;
     }
 
     async addKnownPerson(personName, features = {}) {
