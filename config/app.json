@@ -1,0 +1,100 @@
+{
+  "app": {
+    "name": "HumVidCap",
+    "version": "1.0.0",
+    "port": 3000,
+    "environment": "development"
+  },
+  "logging": {
+    "level": "info",
+    "files": {
+      "error": "logs/error.log",
+      "activity": "logs/activity.log",
+      "access": "logs/access.log"
+    },
+    "console": true
+  },
+  "capture": {
+    "maxSessions": 4,
+    "defaultFrameRate": 10,
+    "supportedFrameRates": [5, 10, 15],
+    "maxRecordingDuration": 3600,
+    "uploadDirectory": "uploads",
+    "tempDirectory": "temp",
+    "videoFormats": ["mp4", "webm", "avi"],
+    "imageFormats": ["png", "jpg", "jpeg"]
+  },
+  "humanDetection": {
+    "enabled": true,
+    "confidenceThreshold": 0.7,
+    "maxDetections": 10,
+    "detectionInterval": 1000,
+    "enableFaceRecognition": true,
+    "enableBodyDetection": true,
+    "knownPeopleDatabase": "config/known_people.json"
+  },
+  "storage": {
+    "local": {
+      "enabled": true,
+      "basePath": "uploads",
+      "maxStorageSize": "10GB",
+      "autoCleanup": true,
+      "cleanupInterval": "24h"
+    },
+    "ftp": {
+      "enabled": true,
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "retryDelay": 5000,
+      "defaultBasePath": "/humvidcap"
+    }
+  },
+  "security": {
+    "cors": {
+      "enabled": true,
+      "origin": "*",
+      "methods": ["GET", "POST", "PUT", "DELETE"]
+    },
+    "rateLimit": {
+      "enabled": true,
+      "windowMs": 900000,
+      "max": 100
+    },
+    "fileUpload": {
+      "maxFileSize": "100MB",
+      "allowedMimeTypes": [
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "video/mp4",
+        "video/webm",
+        "application/json",
+        "text/plain"
+      ]
+    }
+  },
+  "ui": {
+    "theme": "default",
+    "language": "en",
+    "dateFormat": "YYYY-MM-DD HH:mm:ss",
+    "refreshInterval": 5000,
+    "toastDuration": 5000
+  },
+  "performance": {
+    "maxConcurrentCaptures": 4,
+    "memoryLimit": "2GB",
+    "cpuThreshold": 80,
+    "enableGC": true
+  },
+  "features": {
+    "multiViewport": true,
+    "realTimePreview": true,
+    "videoRecording": true,
+    "screenshotCapture": true,
+    "humanDetection": true,
+    "ftpUpload": true,
+    "localStorage": true,
+    "activityLogging": true,
+    "exportLogs": true
+  }
+}

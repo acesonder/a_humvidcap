@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HumVidCap - Screen Capture & Human Detection</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="header">
+        <h1>🎥 HumVidCap - Multi-Viewport Screen Capture</h1>
+        <div class="global-controls">
+            <button id="stop-all-btn" class="btn btn-danger">Stop All Captures</button>
+            <button id="download-logs-btn" class="btn btn-info">Download Logs</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="viewports-grid">
+            <!-- Viewport 1 -->
+            <div class="viewport" id="viewport-1">
+                <div class="viewport-header">
+                    <h3>Viewport 1</h3>
+                    <span class="status-indicator" id="status-1">Idle</span>
+                </div>
+                <div class="viewport-content">
+                    <div class="preview-area" id="preview-1">
+                        <div class="preview-placeholder">No Preview Available</div>
+                    </div>
+                    <div class="controls-panel">
+                        <div class="source-config">
+                            <label>Source Type:</label>
+                            <select id="source-type-1" class="form-control">
+                                <option value="window">Desktop Window</option>
+                                <option value="url">Remote URL</option>
+                                <option value="screen">Full Screen</option>
+                            </select>
+                            
+                            <label>Source URL/Window:</label>
+                            <input type="text" id="source-input-1" class="form-control" placeholder="Enter URL or window name">
+                            
+                            <label>Capture Type:</label>
+                            <select id="capture-type-1" class="form-control">
+                                <option value="video">Video Recording</option>
+                                <option value="screenshot">Screenshots</option>
+                            </select>
+                            
+                            <label>Frame Rate:</label>
+                            <select id="frame-rate-1" class="form-control">
+                                <option value="5">5 FPS</option>
+                                <option value="10">10 FPS</option>
+                                <option value="15">15 FPS</option>
+                            </select>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="human-detection-1">
+                                <label for="human-detection-1">Enable Human Detection</label>
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-primary start-btn" data-viewport="1">Start Capture</button>
+                            <button class="btn btn-secondary stop-btn" data-viewport="1" disabled>Stop Capture</button>
+                            <button class="btn btn-success screenshot-btn" data-viewport="1">Take Screenshot</button>
+                        </div>
+                        
+                        <div class="detected-people" id="people-1">
+                            <h4>Detected People:</h4>
+                            <div class="people-list"></div>
+                            <div class="add-person">
+                                <input type="text" class="person-name" placeholder="Add person name">
+                                <button class="btn btn-sm btn-add-person" data-viewport="1">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewport 2 -->
+            <div class="viewport" id="viewport-2">
+                <div class="viewport-header">
+                    <h3>Viewport 2</h3>
+                    <span class="status-indicator" id="status-2">Idle</span>
+                </div>
+                <div class="viewport-content">
+                    <div class="preview-area" id="preview-2">
+                        <div class="preview-placeholder">No Preview Available</div>
+                    </div>
+                    <div class="controls-panel">
+                        <div class="source-config">
+                            <label>Source Type:</label>
+                            <select id="source-type-2" class="form-control">
+                                <option value="window">Desktop Window</option>
+                                <option value="url">Remote URL</option>
+                                <option value="screen">Full Screen</option>
+                            </select>
+                            
+                            <label>Source URL/Window:</label>
+                            <input type="text" id="source-input-2" class="form-control" placeholder="Enter URL or window name">
+                            
+                            <label>Capture Type:</label>
+                            <select id="capture-type-2" class="form-control">
+                                <option value="video">Video Recording</option>
+                                <option value="screenshot">Screenshots</option>
+                            </select>
+                            
+                            <label>Frame Rate:</label>
+                            <select id="frame-rate-2" class="form-control">
+                                <option value="5">5 FPS</option>
+                                <option value="10">10 FPS</option>
+                                <option value="15">15 FPS</option>
+                            </select>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="human-detection-2">
+                                <label for="human-detection-2">Enable Human Detection</label>
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-primary start-btn" data-viewport="2">Start Capture</button>
+                            <button class="btn btn-secondary stop-btn" data-viewport="2" disabled>Stop Capture</button>
+                            <button class="btn btn-success screenshot-btn" data-viewport="2">Take Screenshot</button>
+                        </div>
+                        
+                        <div class="detected-people" id="people-2">
+                            <h4>Detected People:</h4>
+                            <div class="people-list"></div>
+                            <div class="add-person">
+                                <input type="text" class="person-name" placeholder="Add person name">
+                                <button class="btn btn-sm btn-add-person" data-viewport="2">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewport 3 -->
+            <div class="viewport" id="viewport-3">
+                <div class="viewport-header">
+                    <h3>Viewport 3</h3>
+                    <span class="status-indicator" id="status-3">Idle</span>
+                </div>
+                <div class="viewport-content">
+                    <div class="preview-area" id="preview-3">
+                        <div class="preview-placeholder">No Preview Available</div>
+                    </div>
+                    <div class="controls-panel">
+                        <div class="source-config">
+                            <label>Source Type:</label>
+                            <select id="source-type-3" class="form-control">
+                                <option value="window">Desktop Window</option>
+                                <option value="url">Remote URL</option>
+                                <option value="screen">Full Screen</option>
+                            </select>
+                            
+                            <label>Source URL/Window:</label>
+                            <input type="text" id="source-input-3" class="form-control" placeholder="Enter URL or window name">
+                            
+                            <label>Capture Type:</label>
+                            <select id="capture-type-3" class="form-control">
+                                <option value="video">Video Recording</option>
+                                <option value="screenshot">Screenshots</option>
+                            </select>
+                            
+                            <label>Frame Rate:</label>
+                            <select id="frame-rate-3" class="form-control">
+                                <option value="5">5 FPS</option>
+                                <option value="10">10 FPS</option>
+                                <option value="15">15 FPS</option>
+                            </select>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="human-detection-3">
+                                <label for="human-detection-3">Enable Human Detection</label>
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-primary start-btn" data-viewport="3">Start Capture</button>
+                            <button class="btn btn-secondary stop-btn" data-viewport="3" disabled>Stop Capture</button>
+                            <button class="btn btn-success screenshot-btn" data-viewport="3">Take Screenshot</button>
+                        </div>
+                        
+                        <div class="detected-people" id="people-3">
+                            <h4>Detected People:</h4>
+                            <div class="people-list"></div>
+                            <div class="add-person">
+                                <input type="text" class="person-name" placeholder="Add person name">
+                                <button class="btn btn-sm btn-add-person" data-viewport="3">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Viewport 4 -->
+            <div class="viewport" id="viewport-4">
+                <div class="viewport-header">
+                    <h3>Viewport 4</h3>
+                    <span class="status-indicator" id="status-4">Idle</span>
+                </div>
+                <div class="viewport-content">
+                    <div class="preview-area" id="preview-4">
+                        <div class="preview-placeholder">No Preview Available</div>
+                    </div>
+                    <div class="controls-panel">
+                        <div class="source-config">
+                            <label>Source Type:</label>
+                            <select id="source-type-4" class="form-control">
+                                <option value="window">Desktop Window</option>
+                                <option value="url">Remote URL</option>
+                                <option value="screen">Full Screen</option>
+                            </select>
+                            
+                            <label>Source URL/Window:</label>
+                            <input type="text" id="source-input-4" class="form-control" placeholder="Enter URL or window name">
+                            
+                            <label>Capture Type:</label>
+                            <select id="capture-type-4" class="form-control">
+                                <option value="video">Video Recording</option>
+                                <option value="screenshot">Screenshots</option>
+                            </select>
+                            
+                            <label>Frame Rate:</label>
+                            <select id="frame-rate-4" class="form-control">
+                                <option value="5">5 FPS</option>
+                                <option value="10">10 FPS</option>
+                                <option value="15">15 FPS</option>
+                            </select>
+                            
+                            <div class="checkbox-group">
+                                <input type="checkbox" id="human-detection-4">
+                                <label for="human-detection-4">Enable Human Detection</label>
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-primary start-btn" data-viewport="4">Start Capture</button>
+                            <button class="btn btn-secondary stop-btn" data-viewport="4" disabled>Stop Capture</button>
+                            <button class="btn btn-success screenshot-btn" data-viewport="4">Take Screenshot</button>
+                        </div>
+                        
+                        <div class="detected-people" id="people-4">
+                            <h4>Detected People:</h4>
+                            <div class="people-list"></div>
+                            <div class="add-person">
+                                <input type="text" class="person-name" placeholder="Add person name">
+                                <button class="btn btn-sm btn-add-person" data-viewport="4">Add</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel">
+            <h3>📁 File & Upload Settings</h3>
+            <div class="settings-section">
+                <label>Storage Location:</label>
+                <select id="storage-type" class="form-control">
+                    <option value="local">Local Storage</option>
+                    <option value="ftp">FTP Upload</option>
+                </select>
+                
+                <div id="ftp-settings" style="display: none;">
+                    <input type="text" id="ftp-host" class="form-control" placeholder="FTP Host">
+                    <input type="text" id="ftp-username" class="form-control" placeholder="Username">
+                    <input type="password" id="ftp-password" class="form-control" placeholder="Password">
+                    <input type="text" id="ftp-path" class="form-control" placeholder="Remote Path">
+                </div>
+            </div>
+            
+            <div class="settings-section">
+                <h4>📊 Activity Log</h4>
+                <div id="activity-log" class="log-container">
+                    <div class="log-entry">Application started - Ready for capture</div>
+                </div>
+                <button class="btn btn-outline" id="clear-log-btn">Clear Log</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
