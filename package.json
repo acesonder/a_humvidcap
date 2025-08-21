@@ -1,0 +1,32 @@
+{
+  "name": "a-humvidcap",
+  "version": "1.0.0",
+  "description": "Web-based screen capture application with human detection and multi-viewport support",
+  "main": "server/app.js",
+  "scripts": {
+    "start": "node server/app.js",
+    "dev": "nodemon server/app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "screen-capture",
+    "video-recording",
+    "human-detection",
+    "web-application"
+  ],
+  "author": "acesonder",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "multer": "^1.4.5-lts.1",
+    "ftp": "^0.3.10",
+    "winston": "^3.11.0",
+    "puppeteer": "^22.0.0",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
